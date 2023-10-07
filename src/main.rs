@@ -1,8 +1,11 @@
-use std::{fs::{self, DirEntry}, io, path::Path, ffi::OsStr};
+use std::{
+    ffi::OsStr,
+    fs,
+    io,
+    path::Path,
+};
 
 use clap::Parser;
-use anyhow::Result;
-
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -11,9 +14,9 @@ struct Args {
     #[arg(short, long)]
     dir_path: String,
 
-    // excluded extentions 
+    // excluded extentions
     #[arg(short, long, default_values_t = Vec::<String>::new())]
-    excluded_extentions: Vec<String>
+    excluded_extentions: Vec<String>,
 }
 
 fn main() {
@@ -33,19 +36,17 @@ fn main() {
             if !sort_path.is_dir() {
                 // create dir
                 // create_dir(sort_path.to_str().unwrap_or("unspecified"));
-                if let io::Result::Err(_) = fs::create_dir(ups) {
+                if let io::Result::Err(_) = fs::create_dir(sort_path.clone()) {
                     continue;
                 }
                 // move file
-                fs::rename(fp, sort_path.join(fp.file_name().and_then(OsStr::to_str).get_or_insert("err")));
+                let file_name = fp.file_name();
+                fs::rename(
+                    fp.clone(),
+                    sort_path.join(file_name.and_then(OsStr::to_str).get_or_insert("err")),
+                )
+                .unwrap();
             }
         }
     }
-    // for file in files
-    // check if dir with extension exists
-
-    // if not, create dir
-
-    // copy file 
 }
-
