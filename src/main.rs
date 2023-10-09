@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, fs, io, path::Path, thread, time::Duration};
+use std::{ffi::OsStr, fs, path::Path, thread, time::Duration};
 
 use clap::Parser;
 
@@ -24,33 +24,29 @@ fn main() {
     loop {
         thread::sleep(Duration::from_secs(5));
 
-        'main_loop: for file_path in dir.read_dir().expect("read dir failed") {
-            if let Ok(file_path) = file_path {
-                let fp = file_path.path();
-                if !fp.is_file() {
-                    continue 'main_loop;
-                }
-                let mut er = fp.as_path().extension().and_then(OsStr::to_str);
-                let ups = er.get_or_insert("unspecified");
-
-                if args.excluded_extentions.contains(&ups.to_string()) {
-                    continue 'main_loop;
-                }
-
-                let sort_path = dir.join(Path::new(ups));
-                if !sort_path.is_dir() {
-                    if let io::Result::Err(_) = fs::create_dir(sort_path.clone()) {
-                        continue 'main_loop;
-                    }
-                }
-                // move file
-                let file_name = fp.file_name();
-                fs::rename(
-                    fp.clone(),
-                    sort_path.join(file_name.and_then(OsStr::to_str).get_or_insert("err")),
-                )
-                .unwrap();
+        'main_loop: for file_path in dir.read_dir().expect("read dir failed").flatten() {
+            let fp = file_path.path();
+            if !fp.is_file() {
+                continue 'main_loop;
             }
+            let mut er = fp.as_path().extension().and_then(OsStr::to_str);
+            let ups = er.get_or_insert("unspecified");
+
+            if args.excluded_extentions.contains(&ups.to_string()) {
+                continue 'main_loop;
+            }
+
+            let sort_path = dir.join(Path::new(ups));
+            if !sort_path.is_dir() && fs::create_dir(sort_path.clone()).is_err() {
+                continue 'main_loop;
+            }
+            // move file
+            let file_name = fp.file_name();
+            fs::rename(
+                fp.clone(),
+                sort_path.join(file_name.and_then(OsStr::to_str).get_or_insert("err")),
+            )
+            .unwrap();
         }
     }
 }
