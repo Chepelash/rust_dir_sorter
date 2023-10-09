@@ -1,4 +1,10 @@
-use std::{ffi::OsStr, fs, path::Path, thread, time::Duration};
+use std::{
+    ffi::OsStr,
+    fs,
+    path::{Path, PathBuf},
+    thread,
+    time::Duration,
+};
 
 use clap::Parser;
 
@@ -20,33 +26,41 @@ fn main() {
     // check if target dir exists
     let dir = Path::new(&args.dir_path);
     assert!(dir.is_dir(), "Dir path does not exists!");
-    // get files in dir
     loop {
         thread::sleep(Duration::from_secs(5));
-
-        'main_loop: for file_path in dir.read_dir().expect("read dir failed").flatten() {
-            let fp = file_path.path();
-            if !fp.is_file() {
-                continue 'main_loop;
-            }
-            let mut er = fp.as_path().extension().and_then(OsStr::to_str);
-            let ups = er.get_or_insert("unspecified");
-
-            if args.excluded_extentions.contains(&ups.to_string()) {
+        // get files in dir
+        'main_loop: for entry in dir.read_dir().expect("read dir failed").flatten() {
+            // get file
+            let file_path = entry.path();
+            if !file_path.is_file() {
                 continue 'main_loop;
             }
 
-            let sort_path = dir.join(Path::new(ups));
-            if !sort_path.is_dir() && fs::create_dir(sort_path.clone()).is_err() {
+            // get file extension
+            let file_extension = file_path
+                .as_path()
+                .extension()
+                .get_or_insert(OsStr::new("unspecified"))
+                .to_str()
+                .unwrap();
+
+            if args
+                .excluded_extentions
+                .iter()
+                .any(|ex| ex == file_extension)
+            {
+                continue 'main_loop;
+            }
+
+            // get dir to place a file
+            let sort_dir = dir.join(Path::new(file_extension));
+            if !sort_dir.is_dir() && fs::create_dir::<&Path>(sort_dir.as_ref()).is_err() {
                 continue 'main_loop;
             }
             // move file
-            let file_name = fp.file_name();
-            fs::rename(
-                fp.clone(),
-                sort_path.join(file_name.and_then(OsStr::to_str).get_or_insert("err")),
-            )
-            .unwrap();
+            let file_name: &OsStr = file_path.file_name().expect("file dont have name");
+            fs::rename::<&Path, PathBuf>(file_path.as_ref(), sort_dir.join(file_name))
+                .expect("Cannot move file");
         }
     }
 }
