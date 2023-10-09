@@ -1,12 +1,7 @@
-use std::{
-    ffi::OsStr,
-    fs,
-    path::{Path, PathBuf},
-    thread,
-    time::Duration,
-};
+use std::{ffi::OsStr, path::Path, time::Duration};
 
 use clap::Parser;
+use tokio::{fs, time::sleep};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -20,47 +15,39 @@ struct Args {
     excluded_extentions: Vec<String>,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // get and parse args
     let args = Args::parse();
     // check if target dir exists
     let dir = Path::new(&args.dir_path);
     assert!(dir.is_dir(), "Dir path does not exists!");
     loop {
-        thread::sleep(Duration::from_secs(5));
-        // get files in dir
-        'main_loop: for entry in dir.read_dir().expect("read dir failed").flatten() {
-            // get file
+        let mut entries = fs::read_dir(dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
             let file_path = entry.path();
             if !file_path.is_file() {
-                continue 'main_loop;
+                continue;
             }
-
-            // get file extension
-            let file_extension = file_path
-                .as_path()
+            let extension = file_path
                 .extension()
                 .get_or_insert(OsStr::new("unspecified"))
                 .to_str()
                 .unwrap();
-
-            if args
-                .excluded_extentions
-                .iter()
-                .any(|ex| ex == file_extension)
-            {
-                continue 'main_loop;
+            if args.excluded_extentions.iter().any(|ex| ex == extension) {
+                continue;
             }
-
-            // get dir to place a file
-            let sort_dir = dir.join(Path::new(file_extension));
-            if !sort_dir.is_dir() && fs::create_dir::<&Path>(sort_dir.as_ref()).is_err() {
-                continue 'main_loop;
+            
+            let sort_dir = dir.join(extension);
+            if !sort_dir.is_dir() && fs::create_dir(&sort_dir).await.is_err() {
+                continue;
             }
-            // move file
-            let file_name: &OsStr = file_path.file_name().expect("file dont have name");
-            fs::rename::<&Path, PathBuf>(file_path.as_ref(), sort_dir.join(file_name))
-                .expect("Cannot move file");
+            fs::rename(
+                &file_path,
+                sort_dir.join(file_path.file_name().expect("file should have a name")),
+            )
+            .await?;
         }
+        sleep(Duration::from_secs(5)).await;
     }
 }
